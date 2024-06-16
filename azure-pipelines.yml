@@ -20,15 +20,14 @@ stages:
     - task: Docker@2
       displayName: Build an image
       inputs:
-        containerRegistry: 'K8SExamplesACR'
+        containerRegistry: 'ACRCONNECTION'
         repository: '$(imageRepo)'
         command: 'buildAndPush'
         Dockerfile: '$(Build.SourcesDirectory)/app/Dockerfile'
-        tags: |
-          $(tag)
+        tags: '$(tag)'
     - task: PublishPipelineArtifact@1
       inputs:
-        targetPath: '$(Pipeline.Workspace)/s/kubernetes'
+        targetPath: '$(Pipeline.Workspace)/kubernetes/'
         artifact: 'manifests'
         publishLocation: 'pipeline'
         
@@ -36,19 +35,17 @@ stages:
   displayName: Deploy to Dev
   dependsOn: Build
   variables:
-    acrsecret: k8sexamplesacrauth
-    acrdevurl: 'k8sexamplesacr.azurecr.io'
-    replicaNo: 3
+    acrsecret: sam
+    acrdevurl: 'acrado13.azurecr.io'
+    replicaNo: 1
   jobs:
-  - deployment: Deploy
-    displayName: Deploy to AKS
-    environment: 'k8sdev.default'
+  - job: Build
+    displayName: Build image
+
     pool: 
       vmImage: ubuntu-latest
-    strategy:
-      runOnce:
-        deploy:
-          steps:
+      steps:
+    
           - task: DownloadPipelineArtifact@2
             inputs:
               buildType: 'current'
@@ -60,24 +57,12 @@ stages:
               namespace: 'default'
               secretType: 'dockerRegistry'
               secretName: '$(acrsecret)'
-              dockerRegistryEndpoint: 'K8SExamplesACR'
-          - task: replacetokens@3
-            displayName: Replace Tokens
-            inputs:
-              rootDirectory: '$(Pipeline.Workspace)/manifests/'
-              targetFiles: 'deployment.yml'
-              encoding: 'auto'
-              writeBOM: true
-              actionOnMissing: 'warn'
-              keepToken: false
-              tokenPrefix: '#'
-              tokenSuffix: '#'
-              useLegacyPattern: false
-              enableTransforms: false
-              enableTelemetry: true
+              dockerRegistryEndpoint: 'ACRCONNECTION'
+          
           - task: KubernetesManifest@0
             inputs:
               action: 'deploy'
+              kubernetesServiceConnection: 'AKS_SERVICE_CONNECTION'
               namespace: 'default'
               manifests: |
                 $(Pipeline.Workspace)/manifests/deployment.yml
